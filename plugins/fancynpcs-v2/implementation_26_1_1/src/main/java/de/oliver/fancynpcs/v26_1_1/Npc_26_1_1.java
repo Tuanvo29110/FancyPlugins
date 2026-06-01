@@ -243,14 +243,6 @@ public class Npc_26_1_1 extends Npc {
 
         List<Packet<? super ClientGamePacketListener>> packets = new ArrayList<>();
 
-        PlayerTeam team = new PlayerTeam(new Scoreboard(), "npc-" + localName);
-        team.getPlayers().clear();
-        team.getPlayers().add(npc instanceof ServerPlayer npcPlayer ? npcPlayer.getGameProfile().name() : npc.getStringUUID());
-        team.setColor(PaperAdventure.asVanilla(data.getGlowingColor()));
-        if (!data.isCollidable()) {
-            team.setCollisionRule(Team.CollisionRule.NEVER);
-        }
-
         net.kyori.adventure.text.Component displayName = PaperColor.handler().translate(data.getDisplayName(), serverPlayer.getBukkitEntity());
         Component vanillaComponent = PaperAdventure.asVanilla(displayName);
 
@@ -270,15 +262,11 @@ public class Npc_26_1_1 extends Npc {
         }
 
         if (data.getDisplayName().equalsIgnoreCase("<empty>")) {
-            team.setNameTagVisibility(Team.Visibility.NEVER);
             npc.setCustomName(null);
             npc.setCustomNameVisible(false);
-        } else {
-            team.setNameTagVisibility(Team.Visibility.ALWAYS);
         }
 
         if (npc instanceof ServerPlayer npcPlayer) {
-            team.setPlayerPrefix(vanillaComponent);
             npcPlayer.listName = vanillaComponent;
 
             EnumSet<ClientboundPlayerInfoUpdatePacket.Action> actions = EnumSet.noneOf(ClientboundPlayerInfoUpdatePacket.Action.class);
@@ -291,9 +279,7 @@ public class Npc_26_1_1 extends Npc {
             packets.add(playerInfoPacket);
         }
 
-        boolean isTeamCreatedForPlayer = this.isTeamCreated.getOrDefault(player.getUniqueId(), false);
-        packets.add(ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(team, !isTeamCreatedForPlayer));
-        isTeamCreated.put(player.getUniqueId(), true);
+        sendTeamUpdatePacket(player, serverPlayer, vanillaComponent);
 
         npc.setGlowingTag(data.isGlowing());
 
@@ -423,6 +409,43 @@ public class Npc_26_1_1 extends Npc {
             ClientboundAnimatePacket animatePacket = new ClientboundAnimatePacket(npc, 0);
             runOnPlayerScheduler(serverPlayer.getBukkitEntity(), () -> serverPlayer.connection.send(animatePacket));
         }
+    }
+
+    private void sendTeamUpdatePacket(Player player, ServerPlayer serverPlayer, Component vanillaComponent) {
+        FancyNpcsPlugin.get().getScheduler().runTask(null, () -> {
+            if (npc == null || !isVisibleForPlayer.getOrDefault(player.getUniqueId(), false)) {
+                return;
+            }
+
+            PlayerTeam team = new PlayerTeam(new Scoreboard(), "npc-" + localName);
+            team.getPlayers().clear();
+            team.getPlayers().add(npc instanceof ServerPlayer npcPlayer
+                    ? npcPlayer.getGameProfile().name()
+                    : npc.getStringUUID());
+
+            team.setColor(PaperAdventure.asVanilla(data.getGlowingColor()));
+
+            if (!data.isCollidable()) {
+                team.setCollisionRule(Team.CollisionRule.NEVER);
+            }
+
+            if (data.getDisplayName().equalsIgnoreCase("<empty>")) {
+                team.setNameTagVisibility(Team.Visibility.NEVER);
+            } else {
+                team.setNameTagVisibility(Team.Visibility.ALWAYS);
+            }
+
+            if (npc instanceof ServerPlayer) {
+                team.setPlayerPrefix(vanillaComponent);
+            }
+
+            boolean isTeamCreatedForPlayer = this.isTeamCreated.getOrDefault(player.getUniqueId(), false);
+            Packet<? super ClientGamePacketListener> teamPacket =
+                    ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(team, !isTeamCreatedForPlayer);
+            isTeamCreated.put(player.getUniqueId(), true);
+
+            runOnPlayerScheduler(serverPlayer.getBukkitEntity(), () -> serverPlayer.connection.send(teamPacket));
+        });
     }
 
     private ClientboundPlayerInfoUpdatePacket.Entry getEntry(ServerPlayer npcPlayer, ServerPlayer viewer) {
