@@ -33,6 +33,12 @@ jobs:
       - name: Build FancyNpcs v2
         run: ./gradlew :plugins:fancynpcs-v2:shadowJar
 
+      - name: Upload FancyNpcs v2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FancyNpcs-v2
+          path: plugins/fancynpcs-v2/build/libs/*.jar
+
       - name: Build FancyNpcs
         run: ./gradlew :plugins:fancynpcs:shadowJar
 
